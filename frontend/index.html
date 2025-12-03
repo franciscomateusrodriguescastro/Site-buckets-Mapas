@@ -2,57 +2,173 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa com Leaflet - Exemplo</title>
+  <title>Mapa Interativo - Leaflet + API</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <!-- MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
+  <!-- Estilos -->
   <style>
-    body,html{height:100%;margin:0}
-    #map{height: 100vh}
-    .infoBox{font-size:14px;margin:4px}
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    #map {
+      height: 100%;
+      width: calc(100% - 260px);
+      margin-left: 260px;
+    }
+
+    /* Painel lateral */
+    #sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 260px;
+      height: 100%;
+      background: #1f1f1f;
+      color: #fff;
+      padding: 15px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      border-right: 3px solid #111;
+    }
+
+    #sidebar h2 {
+      font-size: 20px;
+      margin-bottom: 15px;
+      color: #00eaff;
+    }
+
+    #sidebar .btn {
+      width: 100%;
+      padding: 10px;
+      background: #00bcd4;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      margin-top: 8px;
+      border-radius: 4px;
+      font-size: 15px;
+      transition: 0.2s;
+    }
+
+    #sidebar .btn:hover {
+      background: #0097a7;
+    }
+
+    #sidebar select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #loader {
+      display: none;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #00eaff;
+    }
+
+    #contador {
+      margin-top: 10px;
+      font-size: 15px;
+      color: #d1d1d1;
+    }
   </style>
 </head>
 <body>
+
+  <!-- Painel Lateral -->
+  <div id="sidebar">
+    <h2>Controle do Mapa</h2>
+
+    <label>Selecionar arquivo:</label>
+    <select id="arquivoSelect">
+      <option value="dados.json">dados.json</option>
+      <option value="pontos.csv">pontos.csv</option>
+      <option value="mapa.geojson">mapa.geojson</option>
+    </select>
+
+    <button class="btn" onclick="carregarPontos()">Carregar Pontos</button>
+
+    <div id="loader">🔄 Carregando dados...</div>
+
+    <div id="contador">Nenhum ponto carregado.</div>
+  </div>
+
   <div id="map"></div>
 
+  <!-- Bibliotecas -->
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
   <script>
+    // Inicializar mapa
     const map = L.map('map').setView([-3.7327, -38.5267], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // URL do seu backend (em produção altere para https)
-    const API = 'http://localhost:3000/dados?file=dados.json';
+    let markerCluster = L.markerClusterGroup();
+    map.addLayer(markerCluster);
+
+    const API_BASE = "http://localhost:3000/dados?file=";
 
     async function carregarPontos() {
+      const arquivo = document.getElementById('arquivoSelect').value;
+      const url = API_BASE + arquivo;
+
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("contador").innerHTML = "Carregando...";
+
       try {
-        const res = await axios.get(API);
+        const res = await axios.get(url);
         const pontos = res.data;
+
+        markerCluster.clearLayers();
+
         pontos.forEach(p => {
-          if (!p.latitude || !p.longitude) return;
-          const marker = L.marker([p.latitude, p.longitude]).addTo(map);
-          const popup = `<b>${p.nome || 'Ponto'}</b><br>${p.descricao || ''}`;
-          marker.bindPopup(popup);
+          if (p.latitude && p.longitude) {
+            const marker = L.marker([p.latitude, p.longitude]);
+            marker.bindPopup(`
+              <b>${p.nome || "Sem nome"}</b><br>
+              ${p.descricao || ""}
+            `);
+            markerCluster.addLayer(marker);
+          }
         });
-        // opcional: ajustar bounds
-        if (pontos.length) {
-          const latlngs = pontos.filter(x=>x.latitude && x.longitude).map(x=>[x.latitude, x.longitude]);
-          const bounds = L.latLngBounds(latlngs);
-          map.fitBounds(bounds.pad(0.2));
+
+        if (pontos.length > 0) {
+          const validos = pontos.filter(p => p.latitude && p.longitude);
+          const bounds = L.latLngBounds(validos.map(p => [p.latitude, p.longitude]));
+          map.fitBounds(bounds.pad(0.15));
         }
+
+        document.getElementById("contador").innerHTML = 
+          `Pontos carregados: <b>${pontos.length}</b>`;
+
       } catch (err) {
-        console.error('Erro ao carregar pontos', err);
-        alert('Erro ao carregar dados: ' + (err.message || err));
+        alert("Erro ao carregar dados: " + err.message);
+      } finally {
+        document.getElementById("loader").style.display = "none";
       }
     }
 
-    carregarPontos();
+    carregarPontos(); // Carrega automaticamente ao abrir
   </script>
 </body>
 </html>
