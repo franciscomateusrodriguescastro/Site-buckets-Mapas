@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa com Leaflet - Exemplo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+  <style>
+    body,html{height:100%;margin:0}
+    #map{height: 100vh}
+    .infoBox{font-size:14px;margin:4px}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map').setView([-3.7327, -38.5267], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    // URL do seu backend (em produção altere para https)
+    const API = 'http://localhost:3000/dados?file=dados.json';
+
+    async function carregarPontos() {
+      try {
+        const res = await axios.get(API);
+        const pontos = res.data;
+        pontos.forEach(p => {
+          if (!p.latitude || !p.longitude) return;
+          const marker = L.marker([p.latitude, p.longitude]).addTo(map);
+          const popup = `<b>${p.nome || 'Ponto'}</b><br>${p.descricao || ''}`;
+          marker.bindPopup(popup);
+        });
+        // opcional: ajustar bounds
+        if (pontos.length) {
+          const latlngs = pontos.filter(x=>x.latitude && x.longitude).map(x=>[x.latitude, x.longitude]);
+          const bounds = L.latLngBounds(latlngs);
+          map.fitBounds(bounds.pad(0.2));
+        }
+      } catch (err) {
+        console.error('Erro ao carregar pontos', err);
+        alert('Erro ao carregar dados: ' + (err.message || err));
+      }
+    }
+
+    carregarPontos();
+  </script>
+</body>
+</html>
